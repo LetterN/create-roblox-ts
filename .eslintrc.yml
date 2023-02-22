@@ -1,0 +1,62 @@
+﻿root: true
+extends:
+  - plugin:@typescript-eslint/recommended
+  - prettier
+parser: "@typescript-eslint/parser"
+parserOptions:
+  useJSXTextNode: true
+  ecmaVersion: 2020
+  sourceType: module
+  project: "./tsconfig.json"
+  ecmaFeatures:
+    jsx: false # no react uis on this template script
+plugins:
+  - "@typescript-eslint"
+  - "@typescript-eslint/eslint-plugin"
+  - prettier
+  - simple-import-sort
+  - no-autofix
+  - deprecation
+rules:
+  ## ESLint
+  ## ----------------------------------------
+  no-autofix/prefer-const: warn
+  ## Disallow constant expressions in conditions
+  no-constant-condition: [error, { checkLoops: false }]
+  ## Disallow the use of debugger
+  no-debugger: off
+  ## Disallow empty block statements
+  no-empty: [error, { allowEmptyCatch: true }]
+  ## Disallow unnecessary boolean casts
+  no-extra-boolean-cast: error
+  ## Disallow initializing variables to undefined
+  no-undef-init: error
+  ## Require const declarations for variables that are never reassigned after
+  ## declared
+  prefer-const: off
+
+  ## Prettier
+  ## ----------------------------------------
+  prettier/prettier: warn
+
+  ## typescript-eslint
+  ## ----------------------------------------
+  "@typescript-eslint/array-type": [warn, { default: generic, readonly: generic }]
+  "@typescript-eslint/no-floating-promises": [error, { ignoreVoid: true }]
+  "@typescript-eslint/no-unused-vars": warn
+  "@typescript-eslint/explicit-function-return-type": off
+  "@typescript-eslint/interface-name-prefix": off
+  "@typescript-eslint/no-empty-function": off
+  "@typescript-eslint/no-empty-interface": off
+  "@typescript-eslint/no-namespace": off
+  "@typescript-eslint/no-non-null-assertion": off
+  "@typescript-eslint/no-use-before-define": off
+  "@typescript-eslint/explicit-module-boundary-types": off
+  "@typescript-eslint/no-require-imports": error
+  "@typescript-eslint/no-unused-expressions": warn
+
+  curly: [warn, multi-line, consistent]
+  simple-import-sort/exports: warn
+  simple-import-sort/imports: warn
+  deprecation/deprecation: warn
+

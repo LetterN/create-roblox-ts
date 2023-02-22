@@ -4,6 +4,7 @@ import kleur from "kleur";
 import { lookpath } from "lookpath";
 import path from "path";
 import prompts from "prompts";
+import YAML from "yaml";
 import yargs from "yargs";
 
 import { benchmark } from "./util/benchmark";
@@ -29,6 +30,7 @@ enum InitMode {
 enum PackageManager {
 	NPM = "npm",
 	Yarn = "yarn",
+	Yarn3 = "yarn3",
 	PNPM = "pnpm",
 }
 
@@ -47,6 +49,11 @@ const packageManagerCommands: {
 		build: "npm run build",
 	},
 	[PackageManager.Yarn]: {
+		init: "yarn init -y",
+		devInstall: "yarn add --silent -D",
+		build: "yarn run build",
+	},
+	[PackageManager.Yarn3]: {
 		init: "yarn init -y",
 		devInstall: "yarn add --silent -D",
 		build: "yarn run build",
@@ -77,7 +84,6 @@ const COMPILER_VERSION = "2.1.0"; // TODO
 const RBXTS_SCOPE = "@rbxts";
 const PACKAGE_ROOT = path.join(__dirname, "..");
 const TEMPLATES_DIR = path.join(PACKAGE_ROOT, "templates");
-const GIT_IGNORE = ["/node_modules", "/out", "/include", "*.tsbuildinfo"];
 
 async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 	// Detect if there are any additional package managers
@@ -95,6 +101,7 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 		[PackageManager.NPM]: npmAvailable,
 		[PackageManager.PNPM]: pnpmAvailable,
 		[PackageManager.Yarn]: yarnAvailable,
+		[PackageManager.Yarn3]: yarnAvailable,
 	};
 
 	const packageManagerCount = Object.values(packageManagerExistance).filter(
@@ -196,12 +203,26 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 	const paths = {
 		packageJson: path.join(cwd, "package.json"),
 		packageLockJson: path.join(cwd, "package-lock.json"),
+		yarnncOld: path.join(cwd, ".yarnrc"),
+		yarnnc: path.join(cwd, ".yarnrc.yml"),
 		tsconfig: path.join(cwd, "tsconfig.json"),
 		gitignore: path.join(cwd, ".gitignore"),
-		eslintrc: path.join(cwd, ".eslintrc"),
-		prettierrc: path.join(cwd, ".prettierrc"),
+		gitattributes: path.join(cwd, ".gitattributes"),
+		eslintrc: path.join(cwd, ".eslintrc.yml"),
+		eslintrcIgnore: path.join(cwd, ".eslintignore"),
+		prettierrc: path.join(cwd, ".prettierrc.yml"),
+		prettierIgnore: path.join(cwd, ".prettierignore"),
 		settings: path.join(cwd, ".vscode", "settings.json"),
 		extensions: path.join(cwd, ".vscode", "extensions.json"),
+	};
+
+	const configTemplate = {
+		gitignore: path.join(__dirname, "templates/.gitignore"),
+		gitattributes: path.join(__dirname, "templates/.gitattributes"),
+		eslintrc: path.join(__dirname, "templates/.eslintrc.yml"),
+		eslintrcIgnore: path.join(__dirname, "templates/.eslintignore"),
+		prettierrc: path.join(__dirname, "templates/.prettierrc.yml"),
+		prettierIgnore: path.join(__dirname, "templates/.prettierignore"),
 	};
 
 	const templateDir = path.join(TEMPLATES_DIR, template);
@@ -267,7 +288,8 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 					`${error.message}\nDo you not have Git installed? Git CLI is required to use Git functionality. If you do not wish to use Git, answer no to "Configure Git".`
 				);
 			}
-			await fs.outputFile(paths.gitignore, GIT_IGNORE.join("\n") + "\n");
+			await fs.copy(configTemplate.gitignore, paths.gitignore);
+			await fs.copy(configTemplate.gitattributes, paths.gitattributes);
 		});
 	}
 
@@ -285,15 +307,11 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 		if (eslint) {
 			devDependencies.push(
 				"eslint",
-				"@typescript-eslint/eslint-plugin",
 				"@typescript-eslint/parser",
 				"eslint-plugin-roblox-ts"
 			);
 			if (prettier) {
-				devDependencies.push(
-					"eslint-config-prettier",
-					"eslint-plugin-prettier"
-				);
+				devDependencies.push("eslint-plugin-prettier");
 			}
 		}
 
@@ -302,52 +320,48 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 		);
 	});
 
+	// Need this so that yarn adds the node-linker config
+	if (packageManager == PackageManager.Yarn3) {
+		await benchmark("Setting up yarn v3..", async () => {
+			await cmd("yarn set verion latest");
+			await fs.remove(paths.yarnncOld);
+			// Verify that node-linker exists
+			const yamlData = YAML.parse(
+				await fs.readFile(paths.yarnnc, { encoding: "utf8" })
+			);
+			if (
+				!("nodeLinker" in yamlData) ||
+				yamlData["nodeLinker"] !== "node-modules"
+			) {
+				yamlData["nodeLinker"] = "node-modules";
+				await fs.writeFile(paths.yarnnc, YAML.stringify(yamlData));
+			}
+		});
+	}
+
 	if (eslint) {
 		await benchmark("Configuring ESLint..", async () => {
-			const eslintConfig = {
-				parser: "@typescript-eslint/parser",
-				parserOptions: {
-					jsx: true,
-					useJSXTextNode: true,
-					ecmaVersion: 2018,
-					sourceType: "module",
-					project: "./tsconfig.json",
-				},
-				ignorePatterns: ["/out"],
-				plugins: ["@typescript-eslint", "roblox-ts"],
-				extends: [
-					"eslint:recommended",
-					"plugin:@typescript-eslint/recommended",
-					"plugin:roblox-ts/recommended",
-				],
-				rules: {} as { [index: string]: unknown },
-			};
+			await fs.copy(configTemplate.eslintrc, paths.eslintrc);
+			await fs.copy(configTemplate.eslintrcIgnore, paths.eslintrcIgnore);
 
 			if (prettier) {
-				eslintConfig.plugins.push("prettier");
-				eslintConfig.extends.push("plugin:prettier/recommended");
-				eslintConfig.rules["prettier/prettier"] = "warn";
+				const eslintConfig = YAML.parse(
+					await fs.readFile(paths.eslintrc, { encoding: "utf8" })
+				);
+				eslintConfig["extends"] = "prettier";
+				await fs.writeFile(
+					paths.eslintrc,
+					YAML.stringify(eslintConfig),
+					{ encoding: "utf8" }
+				);
 			}
-
-			await fs.outputFile(
-				paths.eslintrc,
-				JSON.stringify(eslintConfig, undefined, "\t")
-			);
 		});
 	}
 
 	if (prettier) {
 		await benchmark("Configuring prettier..", async () => {
-			const prettierConfig = {
-				printWidth: 120,
-				tabWidth: 4,
-				trailingComma: "all",
-				useTabs: true,
-			};
-			await fs.outputFile(
-				paths.prettierrc,
-				JSON.stringify(prettierConfig, undefined, "\t")
-			);
+			await fs.copy(configTemplate.prettierrc, paths.prettierrc);
+			await fs.copy(configTemplate.prettierIgnore, paths.prettierIgnore);
 		});
 	}
 
@@ -356,9 +370,9 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 			const extensions = {
 				recommendations: ["roblox-ts.vscode-roblox-ts"],
 			};
+			// SDKS automaticaly resolves in vscode unless you are using yarn
 			const settings = {
-				"typescript.tsdk": "node_modules/typescript/lib",
-				"files.eol": "\n",
+				"typescript.enablePromptUseWorkspaceTsdk": true,
 			};
 
 			if (eslint) {
@@ -375,19 +389,27 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 					"eslint.run": "onType",
 					"eslint.format.enable": true,
 				});
-			} else if (prettier) {
-				// no eslint but still prettier
+			}
+			if (prettier) {
+				// we still want to recommend the extension even IF eslint is enabled
 				extensions.recommendations.push("esbenp.prettier-vscode");
-				Object.assign(settings, {
-					"[typescript]": {
-						"editor.defaultFormatter": "esbenp.prettier-vscode",
-						"editor.formatOnSave": true,
-					},
-					"[typescriptreact]": {
-						"editor.defaultFormatter": "esbenp.prettier-vscode",
-						"editor.formatOnSave": true,
-					},
-				});
+				if (!eslint) {
+					Object.assign(settings, {
+						"[typescript]": {
+							"editor.defaultFormatter": "esbenp.prettier-vscode",
+							"editor.formatOnSave": true,
+						},
+						"[typescriptreact]": {
+							"editor.defaultFormatter": "esbenp.prettier-vscode",
+							"editor.formatOnSave": true,
+						},
+					});
+				}
+			}
+
+			if (packageManager == PackageManager.Yarn3) {
+				await cmd("yarn dlx @yarnpkg/sdks vscode");
+				extensions.recommendations.push("arcanis.vscode-zipfs");
 			}
 
 			await fs.outputFile(
