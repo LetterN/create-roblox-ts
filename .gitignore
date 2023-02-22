@@ -1,10 +1,29 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+#cache
+node_modules
+
+# Editor directories and files
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+#vscode
+.vscode/launch.json
+.vscode/settings.json
+
 *.cmd
 coverage.lcov
 .nyc_output
 coverage
-node_modules
+
 out
-.DS_Store
+*.tsbuildinfo
 .history
-.vscode/launch.json
-.vscode/settings.json

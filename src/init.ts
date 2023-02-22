@@ -264,6 +264,12 @@ async function init(argv: yargs.Arguments<InitOptions>, initMode: InitMode) {
 			build: "rbxtsc",
 			watch: "rbxtsc -w",
 		};
+		if (eslint) {
+			pkgJson.scripts["lint"] = "eslint src --ext .js,.cjs,.ts,.tsx";
+		}
+		if (prettier) {
+			pkgJson.scripts["prettier"] = "prettierx --check .";
+		}
 		if (template === InitMode.Package) {
 			pkgJson.name = RBXTS_SCOPE + "/" + pkgJson.name;
 			pkgJson.main = "out/init.lua";
